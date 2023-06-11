@@ -7,5 +7,6 @@ services:
       - MONGO_URI=mongodb://localhost:27017
       - BARD_TOKEN=ya29.a0AWY7CknBlNVc7JxWs0-fPEPub1Dec2t9sEEyA2ZzgnmJaaRn3rYpSnqb6rnt2Y1LlOpFHyMo-xEnn92lIQ5WzRFDgQu8cUs2GPZ5D6-FubmRygJZVH5h0lsKH0_I0s79vq-CPj6nS077mxDdqJNdKSAKV7QFiRNlzDy1qAaCgYKAd4SARMSFQG1tDrpopTvtA4_vm8NYFSknyoB1w0173
       - MONGO_DB=edugen
+      - OPENAI_KEY=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
     # entrypoint: uvicorn Core.main:app --host 0.0.0.0 --port 8000 --workers 6
     network_mode: host

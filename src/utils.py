@@ -6,6 +6,7 @@ import os
 import uuid
 from bson.objectid import ObjectId
 from loguru import logger
+import openai
 # connect the db
 client = pymongo.MongoClient(os.getenv("MONGO_URI"))
 db = client[os.getenv("MONGO_DB")]
@@ -200,6 +201,29 @@ def generate_prompt(topic , analogy):
         prompt += f"with the analogy of {analogy}"
     return prompt
 
+
+# from loguru import logger
+
+openai.api_key = os.getenv("OPENAI_KEY")
+
+# ChatGpt output for IFSC from GOOGLE OCR
+def rephrase_withchatGPT(prompt):
+    # prompt = f"give me the curriculum for the topic {topic}, the depth of the curriculum should be {depth} , return in proper json format"
+    completion = openai.ChatCompletion.create(
+            model = "gpt-3.5-turbo",
+            messages = [{"role":"user", "content":prompt}]
+            )
+    result = completion.choices[0].message.content
+    # logger.info("GPT-3.5 IFSC result: {}".format(result))
+    # if result is more than one word, then take the first word if it is is not
+
+    # if len(result.split()) > 1:
+    #     result = result.split()[0]
+    #     result = filter_unwanted_text_from_gpt(result)
+    return result
+
+# curriculum = fetch_curriculum("blockchain", "intermediate")
+
 # course generation
 def generate_course(course_id):
     curr  = fetch_course_db(course_id)
@@ -229,7 +253,7 @@ def rephrase(criteria):
 
     prompt = f"can you explain the following text with the analogy of {analogy} and {depth} the quantity"
 
-    text = get_explanation(prompt)
+    text = rephrase_withchatGPT(prompt)
     return {
         "_id":topic_id,
         "text":text
