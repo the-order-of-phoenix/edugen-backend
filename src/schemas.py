@@ -1,5 +1,8 @@
 import json
-
+from pydantic import BaseModel , conlist , confloat , AnyHttpUrl
+from typing import Dict , Optional
+from enum import Enum
+from fastapi import Query
 #### front end callls
 # create curriculum
 create_curricullum = {
@@ -92,3 +95,35 @@ generate_video = {
         "videoUrl":""
     }
 }
+
+class CreateCurriculum(BaseModel):
+    topic : str
+    domain : str
+    depth : str
+
+
+class createCourse(CreateCurriculum):
+    pass
+
+
+class genCourse(BaseModel):
+    course_id: str
+
+class processCourse(genCourse):
+    pass
+
+class getCourse(genCourse):
+    pass
+class fetchTopic(BaseModel):
+    topic_id: str
+
+class getTopic(fetchTopic):
+    pass
+
+class rephrase(BaseModel):
+    topic_id :str
+    analogy : str
+    depth: str
+
+class rephraseRequest(rephrase):
+    pass

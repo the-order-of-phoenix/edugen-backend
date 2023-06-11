@@ -2,6 +2,7 @@ asyncio
 fastapi
 openai
 requests
-json
-bson
 pymongo
+uvicorn
+gunicorn
+loguru
