@@ -146,7 +146,7 @@ def clean_curricullum_json(response):
     modules_new = []
     for mod in modules:
         topics = mod["topics"]
-        topics = {str(ObjectId()): t for t in topics}
+        topics = [{"_id":str(ObjectId()), "name": t} for t in topics]
 
         mod["topics"] = topics
         modules_new.append(mod)
