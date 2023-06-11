@@ -1,0 +1,18 @@
+version: "3"
+services:
+  edugen-backend:
+    build: .
+    image: edugen:dev
+    environment:
+      - MONGO_URI=mongodb://0.0.0.0:27017/advancedForgery
+    # entrypoint: uvicorn Core.main:app --host 0.0.0.0 --port 8000 --workers 6
+    ports:
+      - "6543:6543"
+
+
+  mongo.prv:
+    image: mongo:4
+    restart: always
+    network_mode: host
+    volumes:
+      - mongodata:/data/db

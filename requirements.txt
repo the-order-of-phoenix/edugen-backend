@@ -1,0 +1,7 @@
+asyncio
+fastapi
+openai
+requests
+json
+bson
+pymongo
