@@ -5,15 +5,16 @@ import pymongo
 import os
 import uuid
 from bson.objectid import ObjectId
-
+from loguru import logger
+import openai
 # connect the db
-client = pymongo.MongoClient(os.get_env("MONGO_URI"))
-db = client[os.get_env("MONGO_DB")]
+client = pymongo.MongoClient(os.getenv("MONGO_URI"))
+db = client[os.getenv("MONGO_DB")]
 
-bard_token = os.get_env("BARD_TOKEN")
+bard_token = os.getenv("BARD_TOKEN")
 
 # update db
-def update_db(collection , query , update_querr):
+def update_db(collection , query , update_query):
     collection = db[collection]
 
     update_query = {"$set":update_query}
@@ -27,14 +28,14 @@ def insert_db(collection_name , document):
     # Access the specified collection
     collection = db[collection_name]
     # Insert the document into the collection
-    inserted_document = collection.insert_one(document)
-    return inserted_document
+    _ = collection.insert_one(document)
+    return True
 
 # > insert curricullum
 def insert_course(curricullum):
     curricullum["is_processed"] = False
     inserted_document = insert_db("courses", curricullum)
-    return inserted_document
+    return True
 
 # > insert topic
 def insert_topic(topic):
@@ -51,11 +52,15 @@ def fetch_from_db(collection, query):
         documents = collection.find(query)
     return documents
 
-def fetch_course(course_id):
-    return fetch_from_db("courses", {"_id": ObjectId(course_id)})
+def fetch_course_db(course_id):
+    course = fetch_from_db("courses", {"_id": ObjectId(course_id)})[0]
+    course["_id"] = str(course["_id"])
+    return course
 
-def fetch_topic(topic_id):
-    return fetch_from_db("topic", {"_id": ObjectId(topic_id)})
+def fetch_topic_db(topic_id):
+    topic =  fetch_from_db("topic", {"_id": ObjectId(topic_id)})[0]
+    topic["_id"] = str(topic["_id"])
+    return topic
 
 def fetch_catalog():
     courses = fetch_from_db("courses" , None)
@@ -63,6 +68,12 @@ def fetch_catalog():
     for course in courses:
         del course["modules"]
         catalog.append(course)
+
+    for doc in catalog:
+        for key, value in doc.items():
+            if isinstance(value, ObjectId):
+                doc[key] = str(value)
+
 
     return catalog
 
@@ -110,30 +121,39 @@ def prepare_curricullum(topic , domain , depth):
         }
     }
 
-    response = requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=data , timeout=10)
     result=""
     if response.status_code == 200:
         result = response.json()["predictions"][0]["content"]
     else:
         print("Request failed with status code:", response.status_code)
-
+    logger.info(f"result from bard --- {result}")
     result = clean_curricullum_json(result)
 
-    _ = insert_course(result)
+    insert_course(result)
+    result["_id"] = str(result["_id"])
     return result
 
 def clean_curricullum_json(response):
-    response = response.replace(" ","")
+    response = response.replace("json","")
     response = response.replace("```", "")
     response = response.replace("\n", "")
-
+    logger.info(f"res after cleaning --- {response}")
     curr = json.loads(response)
 
     modules = curr["modules"]
 
-    modules_dict = {str(uuid.uuid4()): mod for mod in modules}
+    # modules_dict = {str(uuid.uuid4()): mod for mod in modules}
+    modules_new = []
+    for mod in modules:
+        topics = mod["topics"]
+        topics = [{"_id":str(ObjectId()), "name": t} for t in topics]
 
-    curr["modules"] = modules_dict
+        mod["topics"] = topics
+        modules_new.append(mod)
+    curr["modules"] = modules_new
+
+    logger.info(f"res after cleaning --- {response}")
     # curr["course_id"] = str(uuid.uuid4())
 
     return curr
@@ -181,21 +201,45 @@ def generate_prompt(topic , analogy):
         prompt += f"with the analogy of {analogy}"
     return prompt
 
+
+# from loguru import logger
+
+openai.api_key = os.getenv("OPENAI_KEY")
+
+# ChatGpt output for IFSC from GOOGLE OCR
+def rephrase_withchatGPT(prompt):
+    # prompt = f"give me the curriculum for the topic {topic}, the depth of the curriculum should be {depth} , return in proper json format"
+    completion = openai.ChatCompletion.create(
+            model = "gpt-3.5-turbo",
+            messages = [{"role":"user", "content":prompt}]
+            )
+    result = completion.choices[0].message.content
+    # logger.info("GPT-3.5 IFSC result: {}".format(result))
+    # if result is more than one word, then take the first word if it is is not
+
+    # if len(result.split()) > 1:
+    #     result = result.split()[0]
+    #     result = filter_unwanted_text_from_gpt(result)
+    return result
+
+# curriculum = fetch_curriculum("blockchain", "intermediate")
+
 # course generation
 def generate_course(course_id):
-    curr  = fetch_course(course_id)
-    modules = curr["modules"]
+    curr  = fetch_course_db(course_id)
+    modules = curr[0]["modules"]
+    for module in modules:
+        for topic_id in module["topics"]:
+            prompt = generate_prompt(module["topics"][topic_id], analogy=None)
+            text = get_explanation(prompt)
 
-    for topic_id , topic in modules:
-        prompt = generate_prompt(topic, analogy=None)
-        text = get_explanation(prompt)
+            temp_dict = {
+                "_id":ObjectId(topic_id),
+                "topic": module["topics"][topic_id],
+                "text":text
+            }
 
-        temp_dict = {
-            "topic": topic,
-            "text":text
-        }
-
-        _ = insert_topic(temp_dict)
+            _ = insert_topic(temp_dict)
 
     update_db("courses", {"_id":ObjectId(course_id)} , {"is_processed":True})
 
@@ -205,11 +249,11 @@ def rephrase(criteria):
     depth = criteria["depth"]
     analogy = criteria["analogy"]
 
-    topic = fetch_topic(topic_id)
+    topic = fetch_topic_db(topic_id)
 
-    prompt = f"can you rephrase the following text with the analogy of {analogy} and {depth} its depth"
+    prompt = f"can you explain the following text with the analogy of {analogy} and {depth} the quantity"
 
-    text = get_explanation(prompt)
+    text = rephrase_withchatGPT(prompt)
     return {
         "_id":topic_id,
         "text":text
@@ -251,7 +295,8 @@ def find_nearest_subjects(list_of_subjects , source_subject):
     for sub in list_of_subjects:
         lev_score = calculate_levenshtein_distance(sub , source_subject)
         scores[sub] = lev_score
-
+    if len(scores) == 0:
+        return None
     threshold = 4
     min_value = min(scores , key=scores.get)
     min_key = min_value
